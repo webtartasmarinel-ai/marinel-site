@@ -42,7 +42,7 @@ export function SiteHeader({ whatsappUrl }: { whatsappUrl: string }) {
         className={cn(
           "grid w-full max-w-5xl grid-cols-[auto_1fr_auto] items-center gap-4 rounded-full px-5 py-3 transition-all duration-500 lg:px-4",
           scrolled
-            ? "border border-border bg-background/90 shadow-[0_10px_40px_-20px_rgba(139,107,92,0.25)] backdrop-blur-md"
+            ? "border border-[#c9a84c]/40 bg-background/90 shadow-[0_10px_40px_-20px_rgba(139,107,92,0.25)] backdrop-blur-md"
             : "border border-transparent bg-transparent",
         )}
       >
