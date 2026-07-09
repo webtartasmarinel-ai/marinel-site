@@ -1,26 +1,105 @@
-import {
-  generateId,
-  readCollection,
-  slugify,
-  writeCollection,
-} from "@/lib/content-store";
-import type { Course } from "@/types/content";
+import { createAdminClient, createPublicClient } from "@/lib/supabase/server";
+import type { Course, ImagePosition } from "@/types/content";
 
-const FILE = "courses.json";
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+}
+
+type Row = {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  level: string;
+  format: string;
+  image_url: string | null;
+  image_position: ImagePosition | null;
+  start_date: string | null;
+  available_places: number | null;
+  duration: string | null;
+  badge: string | null;
+  price: string | null;
+  featured: boolean;
+  order_index: number;
+  published: boolean;
+};
+
+function toModel(row: Row): Course {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: row.description,
+    level: row.level as Course["level"],
+    format: row.format as Course["format"],
+    imageUrl: row.image_url,
+    imagePosition: row.image_position,
+    startDate: row.start_date,
+    availablePlaces: row.available_places,
+    duration: row.duration,
+    badge: row.badge,
+    price: row.price,
+    featured: row.featured,
+    orderIndex: row.order_index,
+    published: row.published,
+  };
+}
+
+function toRow(input: CourseInput, extra?: { slug?: string; order_index?: number }) {
+  return {
+    title: input.title,
+    slug: extra?.slug ?? slugify(input.title),
+    description: input.description,
+    level: input.level,
+    format: input.format,
+    image_url: input.imageUrl,
+    image_position: input.imagePosition,
+    start_date: input.startDate,
+    available_places: input.availablePlaces,
+    duration: input.duration,
+    badge: input.badge,
+    price: input.price,
+    featured: input.featured,
+    published: input.published,
+    ...(extra?.order_index !== undefined ? { order_index: extra.order_index } : {}),
+  };
+}
 
 export async function getCourses(): Promise<Course[]> {
-  const courses = await readCollection<Course>(FILE);
-  return courses.sort((a, b) => a.orderIndex - b.orderIndex);
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("*")
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export async function getPublishedCourses(): Promise<Course[]> {
-  const courses = await getCourses();
-  return courses.filter((course) => course.published);
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("*")
+    .eq("published", true)
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export async function getCourseById(id: string): Promise<Course | null> {
-  const courses = await getCourses();
-  return courses.find((course) => course.id === id) ?? null;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export type CourseInput = Omit<Course, "id" | "slug" | "orderIndex"> & {
@@ -28,49 +107,55 @@ export type CourseInput = Omit<Course, "id" | "slug" | "orderIndex"> & {
 };
 
 export async function createCourse(input: CourseInput): Promise<Course> {
-  const courses = await readCollection<Course>(FILE);
-  const course: Course = {
-    ...input,
-    id: generateId("curso"),
-    slug: input.slug || slugify(input.title),
-    orderIndex: courses.length
-      ? Math.max(...courses.map((c) => c.orderIndex)) + 1
-      : 1,
-  };
-  await writeCollection(FILE, [...courses, course]);
-  return course;
+  const supabase = createAdminClient();
+  const { data: last } = await supabase
+    .from("courses")
+    .select("order_index")
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single();
+  const orderIndex = last ? (last as { order_index: number }).order_index + 1 : 1;
+  const { data, error } = await supabase
+    .from("courses")
+    .insert(toRow(input, { slug: input.slug, order_index: orderIndex }))
+    .select()
+    .single();
+  if (error) throw error;
+  return toModel(data as Row);
 }
 
-export async function updateCourse(
-  id: string,
-  input: CourseInput,
-): Promise<Course | null> {
-  const courses = await readCollection<Course>(FILE);
-  const index = courses.findIndex((course) => course.id === id);
-  if (index === -1) return null;
-  const updated: Course = {
-    ...courses[index],
-    ...input,
-    slug: input.slug || slugify(input.title),
-  };
-  courses[index] = updated;
-  await writeCollection(FILE, courses);
-  return updated;
+export async function updateCourse(id: string, input: CourseInput): Promise<Course | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .update({ ...toRow(input, { slug: input.slug }), updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export async function deleteCourse(id: string): Promise<void> {
-  const courses = await readCollection<Course>(FILE);
-  await writeCollection(
-    FILE,
-    courses.filter((course) => course.id !== id),
-  );
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("courses").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function toggleCoursePublished(id: string): Promise<Course | null> {
-  const courses = await readCollection<Course>(FILE);
-  const index = courses.findIndex((course) => course.id === id);
-  if (index === -1) return null;
-  courses[index] = { ...courses[index], published: !courses[index].published };
-  await writeCollection(FILE, courses);
-  return courses[index];
+  const supabase = createAdminClient();
+  const { data: current } = await supabase
+    .from("courses")
+    .select("published")
+    .eq("id", id)
+    .single();
+  if (!current) return null;
+  const { data, error } = await supabase
+    .from("courses")
+    .update({ published: !(current as { published: boolean }).published, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }

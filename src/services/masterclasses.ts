@@ -1,73 +1,132 @@
-import {
-  generateId,
-  readCollection,
-  writeCollection,
-} from "@/lib/content-store";
-import type { Masterclass } from "@/types/content";
+import { createAdminClient, createPublicClient } from "@/lib/supabase/server";
+import type { ImagePosition, Masterclass } from "@/types/content";
 
-const FILE = "masterclasses.json";
+type Row = {
+  id: string;
+  title: string;
+  description: string;
+  date: string | null;
+  location: string | null;
+  image_url: string | null;
+  image_position: ImagePosition | null;
+  capacity: number | null;
+  order_index: number;
+  published: boolean;
+};
+
+function toModel(row: Row): Masterclass {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    date: row.date,
+    location: row.location,
+    imageUrl: row.image_url,
+    imagePosition: row.image_position,
+    capacity: row.capacity,
+    orderIndex: row.order_index,
+    published: row.published,
+  };
+}
+
+function toRow(input: MasterclassInput, extra?: { order_index?: number }) {
+  return {
+    title: input.title,
+    description: input.description,
+    date: input.date,
+    location: input.location,
+    image_url: input.imageUrl,
+    image_position: input.imagePosition,
+    capacity: input.capacity,
+    published: input.published,
+    ...(extra?.order_index !== undefined ? { order_index: extra.order_index } : {}),
+  };
+}
 
 export async function getMasterclasses(): Promise<Masterclass[]> {
-  const items = await readCollection<Masterclass>(FILE);
-  return items.sort((a, b) => a.orderIndex - b.orderIndex);
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("masterclasses")
+    .select("*")
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export async function getPublishedMasterclasses(): Promise<Masterclass[]> {
-  const items = await getMasterclasses();
-  return items.filter((item) => item.published);
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("masterclasses")
+    .select("*")
+    .eq("published", true)
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
-export async function getMasterclassById(
-  id: string,
-): Promise<Masterclass | null> {
-  const items = await getMasterclasses();
-  return items.find((item) => item.id === id) ?? null;
+export async function getMasterclassById(id: string): Promise<Masterclass | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("masterclasses")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export type MasterclassInput = Omit<Masterclass, "id" | "orderIndex">;
 
-export async function createMasterclass(
-  input: MasterclassInput,
-): Promise<Masterclass> {
-  const items = await readCollection<Masterclass>(FILE);
-  const masterclass: Masterclass = {
-    ...input,
-    id: generateId("masterclass"),
-    orderIndex: items.length
-      ? Math.max(...items.map((i) => i.orderIndex)) + 1
-      : 1,
-  };
-  await writeCollection(FILE, [...items, masterclass]);
-  return masterclass;
+export async function createMasterclass(input: MasterclassInput): Promise<Masterclass> {
+  const supabase = createAdminClient();
+  const { data: last } = await supabase
+    .from("masterclasses")
+    .select("order_index")
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single();
+  const orderIndex = last ? (last as { order_index: number }).order_index + 1 : 1;
+  const { data, error } = await supabase
+    .from("masterclasses")
+    .insert(toRow(input, { order_index: orderIndex }))
+    .select()
+    .single();
+  if (error) throw error;
+  return toModel(data as Row);
 }
 
-export async function updateMasterclass(
-  id: string,
-  input: MasterclassInput,
-): Promise<Masterclass | null> {
-  const items = await readCollection<Masterclass>(FILE);
-  const index = items.findIndex((item) => item.id === id);
-  if (index === -1) return null;
-  items[index] = { ...items[index], ...input };
-  await writeCollection(FILE, items);
-  return items[index];
+export async function updateMasterclass(id: string, input: MasterclassInput): Promise<Masterclass | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("masterclasses")
+    .update({ ...toRow(input), updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export async function deleteMasterclass(id: string): Promise<void> {
-  const items = await readCollection<Masterclass>(FILE);
-  await writeCollection(
-    FILE,
-    items.filter((item) => item.id !== id),
-  );
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("masterclasses").delete().eq("id", id);
+  if (error) throw error;
 }
 
-export async function toggleMasterclassPublished(
-  id: string,
-): Promise<Masterclass | null> {
-  const items = await readCollection<Masterclass>(FILE);
-  const index = items.findIndex((item) => item.id === id);
-  if (index === -1) return null;
-  items[index] = { ...items[index], published: !items[index].published };
-  await writeCollection(FILE, items);
-  return items[index];
+export async function toggleMasterclassPublished(id: string): Promise<Masterclass | null> {
+  const supabase = createAdminClient();
+  const { data: current } = await supabase
+    .from("masterclasses")
+    .select("published")
+    .eq("id", id)
+    .single();
+  if (!current) return null;
+  const { data, error } = await supabase
+    .from("masterclasses")
+    .update({ published: !(current as { published: boolean }).published, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }

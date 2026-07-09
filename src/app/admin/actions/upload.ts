@@ -1,9 +1,10 @@
 "use server";
 
-import { mkdir, writeFile } from "fs/promises";
+import { createAdminClient } from "@/lib/supabase/server";
 import path from "path";
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const BUCKET = "uploads";
 
 export async function uploadImage(
   formData: FormData,
@@ -23,11 +24,19 @@ export async function uploadImage(
   const safeFolder = folder.replace(/[^a-z0-9-]/gi, "");
   const ext = path.extname(file.name).toLowerCase() || ".jpg";
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads", safeFolder);
-  await mkdir(dir, { recursive: true });
+  const storagePath = `${safeFolder}/${filename}`;
 
+  const supabase = createAdminClient();
   const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, filename), bytes);
 
-  return { url: `/uploads/${safeFolder}/${filename}` };
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, bytes, { contentType: file.type, upsert: false });
+
+  if (error) {
+    return { error: "Error al subir la imagen. Inténtalo de nuevo." };
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+  return { url: data.publicUrl };
 }

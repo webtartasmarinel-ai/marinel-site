@@ -1,12 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { readFile, writeFile } from "fs/promises";
-import path from "path";
 import { cookies } from "next/headers";
 
-// Puerta de acceso local por contraseña única — sustituida por Supabase Auth
-// en el go-live (ver ARCHITECTURE.md). La sesión es una cookie firmada con
-// HMAC para que no pueda falsificarse trivialmente, aunque no hay usuarios
-// múltiples ni roles en esta fase.
 const COOKIE_NAME = "marinel_admin_session";
 const SESSION_SECRET =
   process.env.ADMIN_SESSION_SECRET ?? "dev-only-insecure-secret-change-me";
@@ -29,31 +23,9 @@ export function verifyPassword(password: string): boolean {
   return safeEqual(password, expected);
 }
 
-const ENV_LOCAL_PATH = path.join(process.cwd(), ".env.local");
-
-// Actualiza la contraseña en caliente (proceso actual) y la persiste en
-// .env.local para que sobreviva a un reinicio del servidor. .env.local está
-// en .gitignore, así que la contraseña nunca llega al repositorio.
+// In production (Vercel), update ADMIN_PASSWORD through the Vercel dashboard.
 export async function updateAdminPassword(newPassword: string): Promise<void> {
   process.env.ADMIN_PASSWORD = newPassword;
-
-  let contents = "";
-  try {
-    contents = await readFile(ENV_LOCAL_PATH, "utf-8");
-  } catch {
-    contents = "";
-  }
-
-  const line = `ADMIN_PASSWORD=${newPassword}`;
-  if (/^ADMIN_PASSWORD=.*$/m.test(contents)) {
-    contents = contents.replace(/^ADMIN_PASSWORD=.*$/m, line);
-  } else if (contents.length > 0) {
-    contents = `${contents.replace(/\n*$/, "\n")}${line}\n`;
-  } else {
-    contents = `${line}\n`;
-  }
-
-  await writeFile(ENV_LOCAL_PATH, contents, "utf-8");
 }
 
 export async function createSession(): Promise<void> {

@@ -1,78 +1,104 @@
-import {
-  generateId,
-  readCollection,
-  writeCollection,
-} from "@/lib/content-store";
+import { createAdminClient, createPublicClient } from "@/lib/supabase/server";
 import type { CakeStyle } from "@/types/content";
 
-const FILE = "cake-styles.json";
+type Row = {
+  id: string;
+  name: string;
+  order_index: number;
+  published: boolean;
+};
+
+function toModel(row: Row): CakeStyle {
+  return {
+    id: row.id,
+    name: row.name,
+    orderIndex: row.order_index,
+    published: row.published,
+  };
+}
 
 export async function getCakeStyles(): Promise<CakeStyle[]> {
-  const items = await readCollection<CakeStyle>(FILE);
-  return items.sort((a, b) => a.orderIndex - b.orderIndex);
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("cake_styles")
+    .select("*")
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export async function getPublishedCakeStyles(): Promise<CakeStyle[]> {
-  const items = await getCakeStyles();
-  return items.filter((item) => item.published);
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("cake_styles")
+    .select("*")
+    .eq("published", true)
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export type CakeStyleInput = Omit<CakeStyle, "id" | "orderIndex">;
 
-export async function createCakeStyle(
-  input: CakeStyleInput,
-): Promise<CakeStyle> {
-  const items = await readCollection<CakeStyle>(FILE);
-  const style: CakeStyle = {
-    ...input,
-    id: generateId("estilo"),
-    orderIndex: items.length
-      ? Math.max(...items.map((i) => i.orderIndex)) + 1
-      : 1,
-  };
-  await writeCollection(FILE, [...items, style]);
-  return style;
+export async function createCakeStyle(input: CakeStyleInput): Promise<CakeStyle> {
+  const supabase = createAdminClient();
+  const { data: last } = await supabase
+    .from("cake_styles")
+    .select("order_index")
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single();
+  const orderIndex = last ? (last as { order_index: number }).order_index + 1 : 1;
+  const { data, error } = await supabase
+    .from("cake_styles")
+    .insert({ name: input.name, published: input.published, order_index: orderIndex })
+    .select()
+    .single();
+  if (error) throw error;
+  return toModel(data as Row);
 }
 
-export async function updateCakeStyle(
-  id: string,
-  input: CakeStyleInput,
-): Promise<CakeStyle | null> {
-  const items = await readCollection<CakeStyle>(FILE);
-  const index = items.findIndex((item) => item.id === id);
-  if (index === -1) return null;
-  items[index] = { ...items[index], ...input };
-  await writeCollection(FILE, items);
-  return items[index];
+export async function updateCakeStyle(id: string, input: CakeStyleInput): Promise<CakeStyle | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("cake_styles")
+    .update({ name: input.name, published: input.published })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export async function deleteCakeStyle(id: string): Promise<void> {
-  const items = await readCollection<CakeStyle>(FILE);
-  await writeCollection(
-    FILE,
-    items.filter((item) => item.id !== id),
-  );
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("cake_styles").delete().eq("id", id);
+  if (error) throw error;
 }
 
-export async function toggleCakeStylePublished(
-  id: string,
-): Promise<CakeStyle | null> {
-  const items = await readCollection<CakeStyle>(FILE);
-  const index = items.findIndex((item) => item.id === id);
-  if (index === -1) return null;
-  items[index] = { ...items[index], published: !items[index].published };
-  await writeCollection(FILE, items);
-  return items[index];
+export async function toggleCakeStylePublished(id: string): Promise<CakeStyle | null> {
+  const supabase = createAdminClient();
+  const { data: current } = await supabase
+    .from("cake_styles")
+    .select("published")
+    .eq("id", id)
+    .single();
+  if (!current) return null;
+  const { data, error } = await supabase
+    .from("cake_styles")
+    .update({ published: !(current as { published: boolean }).published })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export async function reorderCakeStyles(orderedIds: string[]): Promise<void> {
-  const items = await readCollection<CakeStyle>(FILE);
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const reordered = orderedIds
-    .map((id, index) => {
-      const item = byId.get(id);
-      return item ? { ...item, orderIndex: index + 1 } : null;
-    })
-    .filter((item): item is CakeStyle => item !== null);
-  await writeCollection(FILE, reordered);
+  const supabase = createAdminClient();
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("cake_styles").update({ order_index: index + 1 }).eq("id", id),
+    ),
+  );
 }

@@ -1,80 +1,127 @@
-import {
-  generateId,
-  readCollection,
-  writeCollection,
-} from "@/lib/content-store";
-import type { GalleryImage } from "@/types/content";
+import { createAdminClient, createPublicClient } from "@/lib/supabase/server";
+import type { GalleryCategory, GalleryImage, ImagePosition } from "@/types/content";
 
-const FILE = "gallery.json";
+type Row = {
+  id: string;
+  image_url: string | null;
+  image_position: ImagePosition | null;
+  caption: string | null;
+  categories: GalleryCategory[];
+  featured: boolean;
+  order_index: number;
+  published: boolean;
+};
+
+function toModel(row: Row): GalleryImage {
+  return {
+    id: row.id,
+    imageUrl: row.image_url,
+    imagePosition: row.image_position,
+    caption: row.caption,
+    categories: row.categories ?? [],
+    featured: row.featured,
+    orderIndex: row.order_index,
+    published: row.published,
+  };
+}
+
+function toRow(input: GalleryImageInput, extra?: { order_index?: number }) {
+  return {
+    image_url: input.imageUrl,
+    image_position: input.imagePosition,
+    caption: input.caption,
+    categories: input.categories,
+    featured: input.featured,
+    published: input.published,
+    ...(extra?.order_index !== undefined ? { order_index: extra.order_index } : {}),
+  };
+}
 
 export async function getGalleryImages(): Promise<GalleryImage[]> {
-  const items = await readCollection<GalleryImage>(FILE);
-  return items.sort((a, b) => a.orderIndex - b.orderIndex);
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("gallery_images")
+    .select("*")
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export async function getPublishedGalleryImages(): Promise<GalleryImage[]> {
-  const items = await getGalleryImages();
-  return items.filter((item) => item.published);
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("gallery_images")
+    .select("*")
+    .eq("published", true)
+    .order("order_index");
+  if (error) throw error;
+  return (data as Row[]).map(toModel);
 }
 
 export type GalleryImageInput = Omit<GalleryImage, "id" | "orderIndex">;
 
-export async function createGalleryImage(
-  input: GalleryImageInput,
-): Promise<GalleryImage> {
-  const items = await readCollection<GalleryImage>(FILE);
-  const image: GalleryImage = {
-    ...input,
-    id: generateId("galeria"),
-    orderIndex: items.length
-      ? Math.max(...items.map((i) => i.orderIndex)) + 1
-      : 1,
-  };
-  await writeCollection(FILE, [...items, image]);
-  return image;
+export async function createGalleryImage(input: GalleryImageInput): Promise<GalleryImage> {
+  const supabase = createAdminClient();
+  const { data: last } = await supabase
+    .from("gallery_images")
+    .select("order_index")
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single();
+  const orderIndex = last ? (last as { order_index: number }).order_index + 1 : 1;
+  const { data, error } = await supabase
+    .from("gallery_images")
+    .insert(toRow(input, { order_index: orderIndex }))
+    .select()
+    .single();
+  if (error) throw error;
+  return toModel(data as Row);
 }
 
-export async function updateGalleryImage(
-  id: string,
-  input: GalleryImageInput,
-): Promise<GalleryImage | null> {
-  const items = await readCollection<GalleryImage>(FILE);
-  const index = items.findIndex((item) => item.id === id);
-  if (index === -1) return null;
-  items[index] = { ...items[index], ...input };
-  await writeCollection(FILE, items);
-  return items[index];
+export async function updateGalleryImage(id: string, input: GalleryImageInput): Promise<GalleryImage | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("gallery_images")
+    .update(toRow(input))
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
 }
 
 export async function deleteGalleryImage(id: string): Promise<void> {
-  const items = await readCollection<GalleryImage>(FILE);
-  await writeCollection(
-    FILE,
-    items.filter((item) => item.id !== id),
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("gallery_images").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function toggleGalleryImagePublished(id: string): Promise<GalleryImage | null> {
+  const supabase = createAdminClient();
+  const { data: current } = await supabase
+    .from("gallery_images")
+    .select("published")
+    .eq("id", id)
+    .single();
+  if (!current) return null;
+  const { data, error } = await supabase
+    .from("gallery_images")
+    .update({ published: !(current as { published: boolean }).published })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return null;
+  return toModel(data as Row);
+}
+
+export async function reorderGalleryImages(orderedIds: string[]): Promise<void> {
+  const supabase = createAdminClient();
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase
+        .from("gallery_images")
+        .update({ order_index: index + 1 })
+        .eq("id", id),
+    ),
   );
-}
-
-export async function toggleGalleryImagePublished(
-  id: string,
-): Promise<GalleryImage | null> {
-  const items = await readCollection<GalleryImage>(FILE);
-  const index = items.findIndex((item) => item.id === id);
-  if (index === -1) return null;
-  items[index] = { ...items[index], published: !items[index].published };
-  await writeCollection(FILE, items);
-  return items[index];
-}
-
-export async function reorderGalleryImages(
-  orderedIds: string[],
-): Promise<void> {
-  const items = await readCollection<GalleryImage>(FILE);
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const reordered = orderedIds
-    .map((id, index) => {
-      const item = byId.get(id);
-      return item ? { ...item, orderIndex: index + 1 } : null;
-    })
-    .filter((item): item is GalleryImage => item !== null);
-  await writeCollection(FILE, reordered);
 }
