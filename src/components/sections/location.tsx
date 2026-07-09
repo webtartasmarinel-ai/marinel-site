@@ -1,6 +1,7 @@
 import { ExternalLink, MapPin } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { SectionEyebrow } from "@/components/layout/section-eyebrow";
+import { LocationMap } from "@/components/sections/location-map";
 import { Reveal } from "@/components/motion/reveal";
 import type { SiteSettings } from "@/types/content";
 
@@ -34,12 +35,7 @@ export function Location({ settings }: { settings: SiteSettings }) {
           <Reveal delay={0.1}>
             <div className="relative mx-auto w-full max-w-sm">
               {settings.mapEmbedUrl ? (
-                <iframe
-                  src={settings.mapEmbedUrl}
-                  title="Ubicación de Marinel Pastelería"
-                  className="aspect-square w-full rounded-3xl border border-border shadow-[0_20px_50px_-30px_rgba(139,107,92,0.3)]"
-                  loading="lazy"
-                />
+                <LocationMap mapEmbedUrl={settings.mapEmbedUrl} />
               ) : (
                 <div className="flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-3xl border border-border bg-gradient-to-br from-pink-tint to-warm">
                   <MapPin

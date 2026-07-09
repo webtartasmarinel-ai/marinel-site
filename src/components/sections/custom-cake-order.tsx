@@ -441,6 +441,28 @@ export function CustomCakeOrder({
                   </div>
                 )}
 
+                {/* Consentimiento RGPD — checkbox nativo required: el
+                    navegador bloquea el envío si no está marcado. */}
+                <label className="flex items-start gap-2.5 text-xs leading-relaxed text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    required
+                    className="mt-0.5 size-4 shrink-0 accent-[#b5677b]"
+                  />
+                  <span>
+                    He leído y acepto la{" "}
+                    <a
+                      href="/privacidad"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 hover:text-pink-ink"
+                    >
+                      política de privacidad
+                    </a>
+                    .
+                  </span>
+                </label>
+
                 <Button
                   type="submit"
                   disabled={isSubmitting}

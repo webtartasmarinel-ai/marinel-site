@@ -25,6 +25,12 @@ export const siteSettingsSchema = z.object({
   mapEmbedUrl: z.string(),
   seoTitle: z.string(),
   seoDescription: z.string(),
+  legalHolderName: z.string(),
+  legalNif: z.string(),
+  legalAddress: z.string(),
+  legalCity: z.string(),
+  legalEmail: z.string(),
+  legalPhone: z.string(),
 });
 
 export type SiteSettingsFormValues = z.infer<typeof siteSettingsSchema>;

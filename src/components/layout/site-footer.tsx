@@ -167,13 +167,28 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
       </Container>
 
       <div className="border-t border-border">
-        {/* La zona derecha recibirá los enlaces legales (aviso legal ·
-            privacidad · cookies) en el go-live — layout ya preparado. */}
         <Container className="flex flex-col items-center justify-between gap-2 py-6 text-xs text-muted-foreground md:flex-row">
           <p>© {new Date().getFullYear()} Marinel Pastelería</p>
-          <p className="text-muted-foreground/70">
-            Repostería artesanal hecha con cariño
-          </p>
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            <Link
+              href="/aviso-legal"
+              className="transition-colors hover:text-[#b5677b]"
+            >
+              Aviso legal
+            </Link>
+            <Link
+              href="/privacidad"
+              className="transition-colors hover:text-[#b5677b]"
+            >
+              Privacidad
+            </Link>
+            <Link
+              href="/cookies"
+              className="transition-colors hover:text-[#b5677b]"
+            >
+              Cookies
+            </Link>
+          </nav>
         </Container>
       </div>
     </footer>

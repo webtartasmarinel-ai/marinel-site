@@ -26,6 +26,12 @@ type Row = {
   map_embed_url: string;
   seo_title: string;
   seo_description: string;
+  legal_holder_name: string;
+  legal_nif: string;
+  legal_address: string;
+  legal_city: string;
+  legal_email: string;
+  legal_phone: string;
 };
 
 function toModel(row: Row): SiteSettings {
@@ -53,6 +59,12 @@ function toModel(row: Row): SiteSettings {
     mapEmbedUrl: row.map_embed_url,
     seoTitle: row.seo_title,
     seoDescription: row.seo_description,
+    legalHolderName: row.legal_holder_name ?? "",
+    legalNif: row.legal_nif ?? "",
+    legalAddress: row.legal_address ?? "",
+    legalCity: row.legal_city ?? "",
+    legalEmail: row.legal_email ?? "",
+    legalPhone: row.legal_phone ?? "",
   };
 }
 
@@ -80,6 +92,12 @@ const DEFAULT_SETTINGS: SiteSettings = {
   mapEmbedUrl: "",
   seoTitle: "",
   seoDescription: "",
+  legalHolderName: "",
+  legalNif: "",
+  legalAddress: "",
+  legalCity: "",
+  legalEmail: "",
+  legalPhone: "",
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -123,6 +141,12 @@ export async function updateSiteSettings(input: Partial<SiteSettings>): Promise<
   if (input.mapEmbedUrl !== undefined) patch.map_embed_url = input.mapEmbedUrl;
   if (input.seoTitle !== undefined) patch.seo_title = input.seoTitle;
   if (input.seoDescription !== undefined) patch.seo_description = input.seoDescription;
+  if (input.legalHolderName !== undefined) patch.legal_holder_name = input.legalHolderName;
+  if (input.legalNif !== undefined) patch.legal_nif = input.legalNif;
+  if (input.legalAddress !== undefined) patch.legal_address = input.legalAddress;
+  if (input.legalCity !== undefined) patch.legal_city = input.legalCity;
+  if (input.legalEmail !== undefined) patch.legal_email = input.legalEmail;
+  if (input.legalPhone !== undefined) patch.legal_phone = input.legalPhone;
   patch.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase

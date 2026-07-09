@@ -187,4 +187,12 @@ export interface SiteSettings {
   mapEmbedUrl: string;
   seoTitle: string;
   seoDescription: string;
+  // Datos legales del titular (aviso legal / privacidad, LSSI-CE art. 10) —
+  // editables desde /admin/legal, alimentan las páginas legales públicas.
+  legalHolderName: string;
+  legalNif: string;
+  legalAddress: string;
+  legalCity: string;
+  legalEmail: string;
+  legalPhone: string;
 }
