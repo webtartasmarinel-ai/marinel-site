@@ -28,14 +28,18 @@ export async function getCakeOccasions(): Promise<CakeOccasion[]> {
 }
 
 export async function getPublishedCakeOccasions(): Promise<CakeOccasion[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("cake_occasions")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("cake_occasions")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export type CakeOccasionInput = Omit<CakeOccasion, "id" | "orderIndex">;

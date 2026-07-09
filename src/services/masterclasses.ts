@@ -54,14 +54,18 @@ export async function getMasterclasses(): Promise<Masterclass[]> {
 }
 
 export async function getPublishedMasterclasses(): Promise<Masterclass[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("masterclasses")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("masterclasses")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export async function getMasterclassById(id: string): Promise<Masterclass | null> {

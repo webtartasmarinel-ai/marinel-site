@@ -48,14 +48,18 @@ export async function getTestimonials(): Promise<Testimonial[]> {
 }
 
 export async function getPublishedTestimonials(): Promise<Testimonial[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("testimonials")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("testimonials")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export async function getTestimonialById(id: string): Promise<Testimonial | null> {

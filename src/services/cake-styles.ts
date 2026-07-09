@@ -28,14 +28,18 @@ export async function getCakeStyles(): Promise<CakeStyle[]> {
 }
 
 export async function getPublishedCakeStyles(): Promise<CakeStyle[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("cake_styles")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("cake_styles")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export type CakeStyleInput = Omit<CakeStyle, "id" | "orderIndex">;

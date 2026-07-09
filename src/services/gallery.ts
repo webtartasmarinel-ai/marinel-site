@@ -48,14 +48,18 @@ export async function getGalleryImages(): Promise<GalleryImage[]> {
 }
 
 export async function getPublishedGalleryImages(): Promise<GalleryImage[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("gallery_images")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("gallery_images")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export type GalleryImageInput = Omit<GalleryImage, "id" | "orderIndex">;

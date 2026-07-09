@@ -81,14 +81,18 @@ export async function getCourses(): Promise<Course[]> {
 }
 
 export async function getPublishedCourses(): Promise<Course[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("courses")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export async function getCourseById(id: string): Promise<Course | null> {

@@ -32,14 +32,18 @@ export async function getCakeSizes(): Promise<CakeSize[]> {
 }
 
 export async function getPublishedCakeSizes(): Promise<CakeSize[]> {
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("cake_sizes")
-    .select("*")
-    .eq("published", true)
-    .order("order_index");
-  if (error) throw error;
-  return (data as Row[]).map(toModel);
+  try {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("cake_sizes")
+      .select("*")
+      .eq("published", true)
+      .order("order_index");
+    if (error || !data) return [];
+    return (data as Row[]).map(toModel);
+  } catch {
+    return [];
+  }
 }
 
 export type CakeSizeInput = Omit<CakeSize, "id" | "orderIndex">;
