@@ -22,7 +22,7 @@ export async function changePasswordAction(
     };
   }
   const { currentPassword, newPassword } = parsed.data;
-  if (!verifyPassword(currentPassword)) {
+  if (!(await verifyPassword(currentPassword))) {
     return { success: false, error: "La contraseña actual no es correcta." };
   }
   await updateAdminPassword(newPassword);
@@ -34,7 +34,7 @@ export async function login(
   formData: FormData,
 ): Promise<{ error?: string }> {
   const password = formData.get("password");
-  if (typeof password !== "string" || !verifyPassword(password)) {
+  if (typeof password !== "string" || !(await verifyPassword(password))) {
     return { error: "Contraseña incorrecta." };
   }
   await createSession();

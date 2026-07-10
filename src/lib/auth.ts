@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, scryptSync, randomBytes } from "crypto";
 import { cookies } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/server";
 
 const COOKIE_NAME = "marinel_admin_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -23,15 +24,63 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufferA, bufferB);
 }
 
-export function verifyPassword(password: string): boolean {
-  const expected = cleanEnv(process.env.ADMIN_PASSWORD);
-  if (!expected || !password) return false;
-  return safeEqual(password.trim(), expected);
+// Password hashing with scrypt (Node built-in — no external dependency).
+// Stored format: "scrypt$<salt-hex>$<derived-hex>".
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const derived = scryptSync(password, salt, 64).toString("hex");
+  return `scrypt$${salt}$${derived}`;
 }
 
-// In production (Vercel), update ADMIN_PASSWORD through the Vercel dashboard.
+function verifyHash(password: string, stored: string): boolean {
+  const [scheme, salt, hash] = stored.split("$");
+  if (scheme !== "scrypt" || !salt || !hash) return false;
+  const derived = scryptSync(password, salt, 64);
+  const storedBuf = Buffer.from(hash, "hex");
+  if (storedBuf.length !== derived.length) return false;
+  return timingSafeEqual(storedBuf, derived);
+}
+
+// The password hash lives in the isolated `admin_auth` table (RLS on, no anon
+// policy) — deliberately NOT in site_settings, which is read on the public path.
+async function getStoredHash(): Promise<string | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("admin_auth")
+      .select("password_hash")
+      .eq("id", 1)
+      .single();
+    if (error || !data) return null;
+    return (data.password_hash as string) || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function verifyPassword(password: string): Promise<boolean> {
+  const candidate = password?.trim();
+  if (!candidate) return false;
+  const storedHash = await getStoredHash();
+  if (storedHash) return verifyHash(candidate, storedHash);
+  // Bootstrap: no hash saved yet → fall back to the env password so nobody is
+  // locked out. The first successful password change writes a hash and this
+  // fallback path stops being used.
+  const expected = cleanEnv(process.env.ADMIN_PASSWORD);
+  if (!expected) return false;
+  return safeEqual(candidate, expected);
+}
+
+// Persists the new password as a scrypt hash in Supabase (via the server-only
+// service_role client). Works in production, unlike writing to process.env.
 export async function updateAdminPassword(newPassword: string): Promise<void> {
-  process.env.ADMIN_PASSWORD = newPassword;
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("admin_auth").upsert({
+    id: 1,
+    password_hash: hashPassword(newPassword),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
 }
 
 export async function createSession(): Promise<void> {
