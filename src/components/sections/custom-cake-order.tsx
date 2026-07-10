@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { submitCakeOrder } from "@/app/actions/cake-order";
+import { TurnstileWidget } from "@/components/forms/turnstile-widget";
 import { cakeOrderSchema } from "@/lib/validations/cake-order";
 import { buildCakeOrderWhatsAppUrl } from "@/lib/whatsapp-message";
 import { formatCakeDimensions, formatDate } from "@/lib/utils";
@@ -203,6 +204,8 @@ export function CustomCakeOrder({
   const [submitted, setSubmitted] = useState(false);
   const [submittedValues, setSubmittedValues] =
     useState<CakeOrderFormValues | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const {
     control,
@@ -236,9 +239,12 @@ export function CustomCakeOrder({
       toast.error(parsed.error.issues[0]?.message ?? "Revisa los datos del formulario.");
       return;
     }
-    const result = await submitCakeOrder(parsed.data);
+    const result = await submitCakeOrder(parsed.data, token);
     if (!result.success) {
       toast.error(result.error);
+      // El token de Turnstile es de un solo uso: refresca el widget.
+      setToken(null);
+      setCaptchaKey((k) => k + 1);
       return;
     }
     const href = buildCakeOrderWhatsAppUrl(whatsappUrl, parsed.data);
@@ -492,6 +498,10 @@ export function CustomCakeOrder({
                     .
                   </span>
                 </label>
+
+                <div>
+                  <TurnstileWidget key={captchaKey} onToken={setToken} />
+                </div>
 
                 <Button
                   type="submit"

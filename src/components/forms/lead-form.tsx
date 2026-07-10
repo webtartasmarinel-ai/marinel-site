@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { submitLead } from "@/app/actions/lead";
+import { TurnstileWidget } from "@/components/forms/turnstile-widget";
 import { buildLeadWhatsAppUrl } from "@/lib/whatsapp-message";
 import {
   EXPERIENCE_LEVELS,
@@ -39,6 +40,8 @@ export function LeadForm({
 }) {
   const [submitted, setSubmitted] = useState(false);
   const [whatsappHref, setWhatsappHref] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
   const {
     register,
     control,
@@ -60,7 +63,7 @@ export function LeadForm({
   });
 
   async function onSubmit(values: LeadFormValues) {
-    const result = await submitLead(values);
+    const result = await submitLead(values, token);
     if (result.success) {
       toast.success(
         "¡Gracias! Marinel revisará tu solicitud y te contactará muy pronto.",
@@ -74,6 +77,9 @@ export function LeadForm({
       setSubmitted(true);
     } else {
       toast.error(result.error);
+      // El token de Turnstile es de un solo uso: refresca el widget.
+      setToken(null);
+      setCaptchaKey((k) => k + 1);
     }
   }
 
@@ -252,6 +258,10 @@ export function LeadForm({
           .
         </span>
       </label>
+
+      <div className="sm:col-span-2">
+        <TurnstileWidget key={captchaKey} onToken={setToken} />
+      </div>
 
       <Button
         type="submit"
